@@ -18,9 +18,11 @@ import { Badge } from "@/components/ui/badge";
 import { useMobile } from "@/hooks/use-mobile";
 import {
   taskListSchema,
-  exampleTaskList,
+  getExampleTaskList,
   responseSchema,
   requestSchema,
+  messageSchema,
+  messageHistorySchema,
 } from "@/utils/ai";
 import { respond } from "@/utils/actions";
 import { z } from "zod";
@@ -37,20 +39,30 @@ export default function RemoteInstructor() {
   const isMobile = useMobile();
 
   // State for task list and current index
-  const [taskList, setTaskList] = useState<z.infer<typeof taskListSchema>>(
-    exampleTaskList // Initialize with example data
-  );
+  const [taskList, setTaskList] = useState<z.infer<typeof taskListSchema>>([
+    {
+      title: "Grab the Yerba Mate",
+      taskDescription:
+        "Retrieve a chilled can of Yerba Mate from the fridge (or shelf) and place it on a stable surface.",
+      value: 10,
+    },
+  ]);
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
 
   // State for AI interaction
   const [aiResponse, setAiResponse] = useState<z.infer<
     typeof responseSchema
   > | null>(null);
-  const [pastImageSummaries, setPastImageSummaries] = useState<string[]>([]);
+
+  // Replace pastImageSummaries with messageHistory
+  const [messageHistory, setMessageHistory] = useState<
+    z.infer<typeof messageHistorySchema>
+  >([]);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [isLoopPaused, setIsLoopPaused] = useState(false);
+  const [isLoopPaused, setIsLoopPaused] = useState(true);
 
   const completionSoundRef = useRef<HTMLAudioElement | null>(null);
 
@@ -93,25 +105,78 @@ export default function RemoteInstructor() {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       imageFile = canvas.toDataURL("image/jpeg"); // Get base64 representation
 
-      // 2. Prepare request
-      const request: z.infer<typeof requestSchema> = {
-        taskList,
-        currentTaskIndex,
-        imageFile,
-        past15ImageSummaries: pastImageSummaries.slice(-15), // Send only the last 15
+      // 2. Create a new user message with the image
+      const newUserMessage: z.infer<typeof messageSchema> = {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Here's the current state of my task.",
+          },
+          {
+            type: "image",
+            image: imageFile,
+          },
+        ],
       };
 
-      // 3. Call AI
+      // Add the user message to history
+      const updatedHistory = [...messageHistory, newUserMessage];
+      // Limit history to 10 messages
+      const limitedHistory = updatedHistory.slice(-10);
+      setMessageHistory(limitedHistory);
+
+      console.log("updatedHistory", limitedHistory);
+
+      // 3. Prepare request with updated message history
+      const request = {
+        taskList,
+        currentTaskIndex,
+        messageHistory: limitedHistory,
+      };
+
+      // 4. Call AI
       const response = await respond(request);
 
       // Check if task index increased (task completed)
       const previousTaskIndex = currentTaskIndex;
-      // 4. Update state with response
+
+      // 5. Update state with response
       setAiResponse(response);
       setCurrentTaskIndex(response.newTaskIndex);
-      setPastImageSummaries((prev) =>
-        [...prev, response.imageSummary].slice(-30)
-      ); // Keep last 30 summaries in state
+
+      // 6. Create assistant message from response and add to history
+      if (response.promptToUser) {
+        const assistantMessage: z.infer<typeof messageSchema> = {
+          role: "assistant",
+          content: response.promptToUser,
+        };
+
+        // Add the assistant message to history
+        const newHistory = [...limitedHistory, assistantMessage];
+        setMessageHistory(newHistory.slice(-10));
+
+        // Add AI prompt to messages UI
+        const newMessage = {
+          id: Date.now(), // Use timestamp as ID
+          text: response.promptToUser,
+          time: Date.now(),
+        };
+        setInstructorMessages((prev) => [...prev, newMessage]);
+
+        // Read the new message aloud
+        if (
+          "speechSynthesis" in window &&
+          response.promptToUser !== null &&
+          response.promptToUser !== "" &&
+          response.promptToUser !== "null"
+        ) {
+          const utterance = new SpeechSynthesisUtterance(response.promptToUser);
+          window.speechSynthesis.speak(utterance);
+        } else {
+          console.warn("Browser does not support Speech Synthesis.");
+        }
+      }
 
       // Trigger confetti if a task was just completed
       if (response.newTaskIndex > previousTaskIndex) {
@@ -121,24 +186,6 @@ export default function RemoteInstructor() {
           .catch((err) => console.error("Error playing sound:", err));
         // Hide confetti after 5 seconds
         setTimeout(() => setShowConfetti(false), 5000);
-      }
-
-      // Add AI prompt to messages if it's not empty
-      if (response.promptToUser) {
-        const newMessage = {
-          id: Date.now(), // Use timestamp as ID
-          text: response.promptToUser,
-          time: Date.now(),
-        };
-        setInstructorMessages((prev) => [...prev, newMessage]);
-
-        // Read the new message aloud
-        if ("speechSynthesis" in window) {
-          const utterance = new SpeechSynthesisUtterance(response.promptToUser);
-          window.speechSynthesis.speak(utterance);
-        } else {
-          console.warn("Browser does not support Speech Synthesis.");
-        }
       }
     } catch (err) {
       console.error("Error processing frame or calling AI:", err);
@@ -166,22 +213,19 @@ export default function RemoteInstructor() {
     const intervalId = setInterval(() => {
       if (!isLoopPaused) {
         processCameraFrame();
-        console.log(pastImageSummaries);
       }
-    }, 3000); // Run every 3 seconds
+    }, 1000); // Run every 3 seconds
 
     // Cleanup function to clear interval
     return () => clearInterval(intervalId);
 
     // Dependencies: Re-run if camera state changes or critical state updates
-    // Note: Adding processCameraFrame directly causes infinite loops if state updates within it
-    // We rely on the interval and the checks within processCameraFrame
   }, [
     cameraActive,
     isLoopPaused,
     taskList,
     currentTaskIndex,
-    pastImageSummaries,
+    messageHistory,
     isProcessing,
   ]);
 
@@ -248,6 +292,21 @@ export default function RemoteInstructor() {
     completionSoundRef.current.load(); // Preload the sound
   }, []);
 
+  // Fetch the latest task list from the API on mount
+  useEffect(() => {
+    async function fetchTaskList() {
+      try {
+        const tasks = await getExampleTaskList();
+        console.log("tasks", tasks);
+        setTaskList(tasks);
+      } catch (err) {
+        setError("Failed to fetch task list");
+        console.error("Failed to fetch task list", err);
+      }
+    }
+    fetchTaskList();
+  }, []);
+
   const handleSubmitQuestion = () => {
     if (question.trim()) {
       // In a real app, you would send this to your backend
@@ -275,9 +334,7 @@ export default function RemoteInstructor() {
       )}
       {/* Header */}
       <header className="bg-white border-b py-3 px-4 flex justify-between items-center shrink-0">
-        <h1 className="text-lg font-semibold text-slate-800">
-          Remote Task Instructor
-        </h1>
+        <h1 className="text-lg font-semibold text-slate-800">Sidequest</h1>
         <div className="flex items-center gap-2">
           <Button
             variant={cameraActive ? "default" : "outline"}
@@ -314,197 +371,196 @@ export default function RemoteInstructor() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Camera Stream - Fixed height on mobile, flex on desktop */}
-        <div
-          className={`relative bg-gray-100 ${
-            hasMounted && isMobile ? "h-[40vh]" : "flex-1"
-          } w-full overflow-hidden`}
-        >
-          {cameraActive ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 text-slate-500">
-              <Camera className="h-16 w-16 opacity-50" />
-              <p className="text-lg opacity-70">Camera is turned off</p>
-              <Button onClick={() => setCameraActive(true)}>
-                Enable Camera
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Task and Feedback Panel - Scrollable on mobile */}
-        {hasMounted && (
-          <div
-            className={`${
-              isMobile
-                ? "h-[60vh] overflow-y-auto"
-                : "flex-1 overflow-hidden flex"
-            } bg-slate-50`}
-          >
+        {/* Show completion UI if all tasks are finished */}
+        {currentTaskIndex >= taskList.length ? (
+          <div className="flex-1 flex flex-col items-center justify-center bg-white relative">
+            <Confetti className="w-full h-full absolute top-0 left-0 z-50" />
+            <h2 className="text-3xl font-bold text-green-600 z-10">
+              All tasks completed!
+            </h2>
+            <p className="text-lg text-slate-700 mt-4 z-10">
+              Congratulations, you have finished all tasks.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Camera Stream - Fixed height on mobile, flex on desktop */}
             <div
-              className={`${
-                isMobile
-                  ? "p-4 space-y-4"
-                  : "flex-1 p-4 overflow-auto flex flex-col md:flex-row gap-4 max-w-7xl mx-auto w-full"
-              }`}
+              className={`relative bg-gray-100 ${
+                hasMounted && isMobile ? "h-[40vh]" : "flex-1"
+              } w-full overflow-hidden`}
             >
-              {/* Current Task Card */}
-              <Card
-                className={`${
-                  isMobile ? "w-full" : "w-full md:w-96"
-                } shadow-sm`}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">
-                      Task {currentTask ? currentTaskIndex + 1 : "N/A"} of{" "}
-                      {taskList.length}
-                    </CardTitle>
-                    {currentTask && (
-                      <Badge
-                        variant="outline"
-                        className="bg-green-50 text-green-700 border-green-200"
+              {cameraActive ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  {isLoopPaused && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40">
+                      <Button
+                        onClick={() => setIsLoopPaused(false)}
+                        size="lg"
+                        className="flex items-center gap-2"
                       >
-                        In Progress
-                      </Badge>
-                    )}
-                  </div>
-                  <CardDescription>
-                    {currentTask ? currentTask.title : "No tasks available"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-slate-600">
-                    {currentTask
-                      ? currentTask.taskDescription
-                      : "Add tasks to begin."}
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Instructor Feedback */}
-              <Card
-                className={`${
-                  isMobile ? "w-full" : "w-full md:w-96"
-                } shadow-sm`}
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Instructor Feedback</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ScrollArea className="h-[200px] px-6 py-2">
-                    {/* Timeline structure - Removed space-y-4, spacing handled by pb-4 on content */}
-                    <div className="relative">
-                      {[...instructorMessages]
-                        .reverse()
-                        .map((message, index, arr) => (
-                          // Use items-start and self-stretch for the column
-                          <div
-                            key={message.id}
-                            className="flex items-start gap-3"
-                          >
-                            {/* Timeline Dot and Line Column */}
-                            <div className="flex flex-col items-center self-stretch">
-                              {/* Dot - Use flex-shrink-0 */}
-                              <div className="flex-shrink-0">
-                                {index === 0 ? (
-                                  <div className="relative h-3 w-3">
-                                    <div className="absolute h-3 w-3 rounded-full bg-green-500"></div>
-                                  </div>
-                                ) : (
-                                  <div className="h-3 w-3 rounded-full bg-slate-300"></div>
-                                )}
-                              </div>
-                              {/* Connecting Line - Use flex-grow */}
-                              {index < arr.length - 1 && (
-                                <div className="w-px bg-slate-300 flex-grow"></div>
-                              )}
-                            </div>
-
-                            {/* Message Content - Added pb-4 for spacing */}
-                            <div className="pb-4 flex-1">
-                              <p className="text-sm text-slate-700">
-                                {message.text}
-                              </p>
-                              <p className="text-xs text-slate-400 mt-1">
-                                {(() => {
-                                  const now = Date.now();
-                                  const secondsAgo = Math.round(
-                                    (now - message.time) / 1000
-                                  );
-                                  if (secondsAgo < 1) return "Just now";
-                                  if (secondsAgo < 60)
-                                    return `${secondsAgo} sec ago`;
-                                  const minutesAgo = Math.floor(
-                                    secondsAgo / 60
-                                  );
-                                  if (minutesAgo < 60)
-                                    return `${minutesAgo} min ago`;
-                                  const hoursAgo = Math.floor(minutesAgo / 60);
-                                  // Add more conditions for days etc. if needed
-                                  return `${hoursAgo} hr ago`;
-                                })()}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
+                        <Play className="h-4 w-4" />
+                        Press to Start
+                      </Button>
                     </div>
-                  </ScrollArea>
-                </CardContent>
-                <CardFooter className="pt-2 flex flex-col">
-                  {showQuestionForm ? (
-                    <div className="w-full space-y-2">
-                      <Textarea
-                        placeholder="Type your question here..."
-                        value={question}
-                        onChange={(e) => setQuestion(e.target.value)}
-                        className="resize-none"
-                      />
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowQuestionForm(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button size="sm" onClick={handleSubmitQuestion}>
-                          <Send className="h-4 w-4 mr-2" /> Send
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setShowQuestionForm(true)}
-                    >
-                      Ask a follow-up question
-                    </Button>
                   )}
-                  {error && (
-                    <p className="text-xs text-red-500 mt-2">Error: {error}</p>
-                  )}
-                  {isProcessing && (
-                    <p className="text-xs text-blue-500 mt-2">
-                      AI Processing...
-                    </p>
-                  )}
-                </CardFooter>
-              </Card>
+                </>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 text-slate-500">
+                  <Camera className="h-16 w-16 opacity-50" />
+                  <p className="text-lg opacity-70">Camera is turned off</p>
+                  <Button onClick={() => setCameraActive(true)}>
+                    Enable Camera
+                  </Button>
+                </div>
+              )}
             </div>
-          </div>
-        )}
-        {!hasMounted && (
-          <div className="flex-1 flex items-center justify-center bg-slate-50">
-            <p>Loading UI...</p>
-          </div>
+
+            {/* Task and Feedback Panel - Scrollable on mobile */}
+            {hasMounted && (
+              <div
+                className={`${
+                  isMobile
+                    ? "h-[60vh] overflow-y-auto"
+                    : "flex-1 overflow-hidden flex"
+                } bg-slate-50`}
+              >
+                <div
+                  className={`${
+                    isMobile
+                      ? "p-4 space-y-4"
+                      : "flex-1 p-4 overflow-auto flex flex-col md:flex-row gap-4 max-w-7xl mx-auto w-full"
+                  }`}
+                >
+                  {/* Current Task Card */}
+                  <Card
+                    className={`${
+                      isMobile ? "w-full" : "w-full md:w-96"
+                    } shadow-sm`}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-lg">
+                          Task {currentTask ? currentTaskIndex + 1 : "N/A"} of{" "}
+                          {taskList.length}
+                        </CardTitle>
+                        {currentTask && (
+                          <Badge
+                            variant="outline"
+                            className="bg-green-50 text-green-700 border-green-200"
+                          >
+                            In Progress
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription>
+                        {currentTask ? currentTask.title : "No tasks available"}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-slate-600">
+                        {currentTask
+                          ? currentTask.taskDescription
+                          : "Add tasks to begin."}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Instructor Feedback */}
+                  <Card
+                    className={`${
+                      isMobile ? "w-full" : "w-full md:w-96"
+                    } shadow-sm h-full`}
+                  >
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">
+                        Instructor Feedback
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <ScrollArea className="px-6 py-2 h-full">
+                        {/* Timeline structure - Removed space-y-4, spacing handled by pb-4 on content */}
+                        <div className="relative">
+                          {[...instructorMessages]
+                            .reverse()
+                            .filter(
+                              (message) =>
+                                message.text !== null &&
+                                message.text !== "" &&
+                                message.text !== "null"
+                            )
+                            .map((message, index, arr) => (
+                              // Use items-start and self-stretch for the column
+                              <div
+                                key={message.id}
+                                className="flex items-start gap-3"
+                              >
+                                {/* Timeline Dot and Line Column */}
+                                <div className="flex flex-col items-center self-stretch">
+                                  {/* Dot - Use flex-shrink-0 */}
+                                  <div className="flex-shrink-0">
+                                    {index === 0 ? (
+                                      <div className="relative h-3 w-3">
+                                        <div className="absolute h-3 w-3 rounded-full bg-green-500"></div>
+                                      </div>
+                                    ) : (
+                                      <div className="h-3 w-3 rounded-full bg-slate-300"></div>
+                                    )}
+                                  </div>
+                                  {/* Connecting Line - Use flex-grow */}
+                                  {index < arr.length - 1 && (
+                                    <div className="w-px bg-slate-300 flex-grow"></div>
+                                  )}
+                                </div>
+
+                                {/* Message Content - Added pb-4 for spacing */}
+                                <div className="pb-4 flex-1">
+                                  <p className="text-sm text-slate-700">
+                                    {message.text}
+                                  </p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {(() => {
+                                      const now = Date.now();
+                                      const secondsAgo = Math.round(
+                                        (now - message.time) / 1000
+                                      );
+                                      if (secondsAgo < 1) return "Just now";
+                                      if (secondsAgo < 60)
+                                        return `${secondsAgo} sec ago`;
+                                      const minutesAgo = Math.floor(
+                                        secondsAgo / 60
+                                      );
+                                      if (minutesAgo < 60)
+                                        return `${minutesAgo} min ago`;
+                                      const hoursAgo = Math.floor(
+                                        minutesAgo / 60
+                                      );
+                                      // Add more conditions for days etc. if needed
+                                      return `${hoursAgo} hr ago`;
+                                    })()}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+            {!hasMounted && (
+              <div className="flex-1 flex items-center justify-center bg-slate-50">
+                <p>Loading UI...</p>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

@@ -45,7 +45,7 @@ export const taskListSchema = z.array(
 //   {
 //     title: "Remove Second Sleeve",
 //     taskDescription:
-//       "Pull the jacket off the remaining arm, ensuring the garment doesn’t fall or drag.",
+//       "Pull the jacket off the remaining arm, ensuring the garment doesn't fall or drag.",
 //     value: 15,
 //   },
 //   {
@@ -62,24 +62,85 @@ export const exampleTaskList: z.infer<typeof taskListSchema> = [
     taskDescription:
       "Retrieve a chilled can of Yerba Mate from the fridge (or shelf) and place it on a stable surface.",
     value: 10,
-  },
+  }, //,
   {
-    title: "Lift the Pull-Tab",
-    taskDescription:
-      "Pull the tab straight up until you hear the hiss of carbonation and the seal breaks.",
+    title: "Open the can",
+    taskDescription: "Show the can to the camera so I can see the opening.",
     value: 20,
   },
 ];
 
+// Define schema for a single message content item (text or image)
+const messageContentSchema = z.union([
+  z.object({ type: z.literal("text"), text: z.string() }),
+  z.object({ type: z.literal("image"), image: z.string() }), // base64 image
+]);
+
+// Define schema for a single message (user or assistant)
+// Allow content to be string (for assistant) or array (for user with image)
+export const messageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.union([z.string(), z.array(messageContentSchema)]),
+  // Optional fields you might want later
+  // timestamp: z.number().optional(),
+  // imageSummary: z.string().optional(), // Could attach summary directly
+});
+
+// Define schema for the message history
+export const messageHistorySchema = z.array(messageSchema);
+
+// Updated request schema for the server action
 export const requestSchema = z.object({
   taskList: taskListSchema,
   currentTaskIndex: z.number(),
-  imageFile: z.string(),
-  past15ImageSummaries: z.array(z.string()),
+  messageHistory: messageHistorySchema, // Pass the whole history
 });
 
 export const responseSchema = z.object({
-  promptToUser: z.string(),
+  promptToUser: z.string().optional(),
   newTaskIndex: z.number(),
   imageSummary: z.string(),
 });
+
+export async function getExampleTaskList(): Promise<
+  z.infer<typeof taskListSchema>
+> {
+  const res = await fetch(
+    "https://stephen.ayush.digital/api/get_latest_task",
+    // "https://deep-stable-gorilla.ngrok-free.app/api/get_latest_task",
+    {
+      // headers: {
+      //   "ngrok-skip-browser-warning": "true",
+      // },
+    }
+  );
+
+  console.log(res);
+  if (!res.ok) throw new Error("Failed to fetch latest task list");
+  const data = await res.json();
+
+  console.log("data", data);
+  // Expecting data.subtasks to be an array of tasks
+  return data.subtasks;
+
+  return [
+    {
+      title: "Grab the Yerba Mate",
+      taskDescription:
+        "Retrieve a chilled can of Yerba Mate from the fridge (or shelf) and place it on a stable surface.",
+      value: 10,
+    },
+    {
+      title: "Lift the Pull-Tab",
+      taskDescription:
+        "Pull the tab straight up until you hear the hiss of carbonation and the seal breaks.",
+      value: 20,
+    },
+    {
+      title: "Verify & Sip",
+      taskDescription:
+        "Check that the opening is clear, then take a small sip to confirm the can is fully open and enjoy your Yerba Mate.",
+      value: 10,
+    },
+  ];
+}
