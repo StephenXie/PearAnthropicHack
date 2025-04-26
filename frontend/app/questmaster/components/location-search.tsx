@@ -20,9 +20,10 @@ console.warn = function filterWarnings(msg, ...args) {
 
 interface LocationSearchProps {
   setSelectedLocation: (location: { lat: number; lng: number } | null) => void
+  setLocationName?: (name: string) => void
 }
 
-export default function LocationSearch({ setSelectedLocation }: LocationSearchProps) {
+export default function LocationSearch({ setSelectedLocation, setLocationName }: LocationSearchProps) {
   const { isLoaded } = useMapConfig()
   const [isSearching, setIsSearching] = useState(false)
   const mounted = useRef(false)
@@ -73,6 +74,11 @@ export default function LocationSearch({ setSelectedLocation }: LocationSearchPr
       const results = await getGeocode({ address: description })
       const { lat, lng } = await getLatLng(results[0])
       setSelectedLocation({ lat, lng })
+      
+      // Store the location name/address
+      if (setLocationName) {
+        setLocationName(description)
+      }
     } catch (error) {
       console.error("Error: ", error)
     } finally {
@@ -90,6 +96,12 @@ export default function LocationSearch({ setSelectedLocation }: LocationSearchPr
       const results = await getGeocode({ address: value })
       const { lat, lng } = await getLatLng(results[0])
       setSelectedLocation({ lat, lng })
+      
+      // Store the location name/address
+      if (setLocationName) {
+        setLocationName(value)
+      }
+      
       clearSuggestions()
     } catch (error) {
       console.error("Error: ", error)

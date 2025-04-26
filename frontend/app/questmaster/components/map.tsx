@@ -13,6 +13,7 @@ const libraries: Libraries = ["places"]
 interface MapProps {
   selectedLocation: { lat: number; lng: number } | null
   setSelectedLocation: (location: { lat: number; lng: number } | null) => void
+  setLocationName?: (name: string) => void
 }
 
 // Map container style
@@ -30,7 +31,7 @@ const defaultCenter = {
 // Hardcoded API key - in a real application, this would be an environment variable
 const GOOGLE_MAPS_API_KEY = "AIzaSyAbWrxUnlMnfv3seH6uDZ1HzTVYZNvDuCQ"
 
-export default function Map({ selectedLocation, setSelectedLocation }: MapProps) {
+export default function Map({ selectedLocation, setSelectedLocation, setLocationName }: MapProps) {
   const { setIsLoaded } = useMapConfig()
   const [map, setMap] = useState<google.maps.Map | null>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
@@ -74,9 +75,27 @@ export default function Map({ selectedLocation, setSelectedLocation }: MapProps)
         const lat = e.latLng.lat()
         const lng = e.latLng.lng()
         setSelectedLocation({ lat, lng })
+        
+        // Use reverse geocoding to get address from coordinates
+        if (google && setLocationName) {
+          const geocoder = new google.maps.Geocoder()
+          geocoder.geocode(
+            { location: { lat, lng } },
+            (
+              results: google.maps.GeocoderResult[] | null,
+              status: google.maps.GeocoderStatus
+            ) => {
+              if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
+                setLocationName(results[0].formatted_address)
+              } else {
+                setLocationName(`Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`)
+              }
+            }
+          )
+        }
       }
     },
-    [setSelectedLocation],
+    [setSelectedLocation, setLocationName, google],
   )
 
   // Pan to selected location when it changes
@@ -96,6 +115,24 @@ export default function Map({ selectedLocation, setSelectedLocation }: MapProps)
             lng: position.coords.longitude,
           }
           setSelectedLocation(location)
+          
+          // Use reverse geocoding for current location too
+          if (google && setLocationName) {
+            const geocoder = new google.maps.Geocoder()
+            geocoder.geocode(
+              { location },
+              (
+                results: google.maps.GeocoderResult[] | null,
+                status: google.maps.GeocoderStatus
+              ) => {
+                if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
+                  setLocationName(results[0].formatted_address)
+                } else {
+                  setLocationName(`Lat: ${location.lat.toFixed(6)}, Lng: ${location.lng.toFixed(6)}`)
+                }
+              }
+            )
+          }
         },
         () => {
           alert("Unable to retrieve your location")
@@ -119,7 +156,7 @@ export default function Map({ selectedLocation, setSelectedLocation }: MapProps)
     <div className="relative h-full w-full rounded-md overflow-hidden border border-gray-200">
       {/* Location search component */}
       <div className="absolute top-4 left-4 right-4 z-10">
-        <LocationSearch setSelectedLocation={setSelectedLocation} />
+        <LocationSearch setSelectedLocation={setSelectedLocation} setLocationName={setLocationName} />
       </div>
 
       {/* Google Map */}

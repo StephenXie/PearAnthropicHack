@@ -7,6 +7,9 @@ export interface EventDetails {
   name: string
   description: string
   location: { lat: number; lng: number } | null
+  locationName?: string
+  startDateTime?: string
+  endDateTime?: string
 }
 
 interface MapConfigContextType {
@@ -23,6 +26,9 @@ const defaultEventDetails: EventDetails = {
   name: "",
   description: "",
   location: null,
+  locationName: "",
+  startDateTime: "",
+  endDateTime: "",
 }
 
 const MapConfigContext = createContext<MapConfigContextType | undefined>(undefined)
