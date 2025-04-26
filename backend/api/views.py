@@ -5,6 +5,7 @@ from .api import generate_feedback_on_task_description
 from uuid import uuid4
 from task.models import Task
 from task.serializers import TaskSerializer
+from random import randint
 
 """
 POST: api/generate_feedback_on_task_description
@@ -54,3 +55,16 @@ def generate_feedback_on_task_description_view(request):
     response["subtasks"] = result["subtasks"]
     return Response(response)
     
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_latest_task(request):
+    tasks = Task.objects.all()
+    latest_task = tasks.order_by('-created_at').first()
+    serializer = TaskSerializer(latest_task)
+    result = serializer.data
+    for task in result["subtasks"]:
+        task["value"] = randint(1, 100)
+        task["taskDescription"] = task["description"]
+        del task["description"]
+    return Response(result)
+
