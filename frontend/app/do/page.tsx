@@ -164,17 +164,61 @@ export default function RemoteInstructor() {
         };
         setInstructorMessages((prev) => [...prev, newMessage]);
 
-        // Read the new message aloud
+        // Read the new message aloud using ElevenLabs voice API
         if (
-          "speechSynthesis" in window &&
           response.promptToUser !== null &&
           response.promptToUser !== "" &&
           response.promptToUser !== "null"
         ) {
-          const utterance = new SpeechSynthesisUtterance(response.promptToUser);
-          window.speechSynthesis.speak(utterance);
+          // Call ElevenLabs API to convert text to speech
+          const playElevenLabsAudio = async (text: string) => {
+            try {
+              // Replace with your ElevenLabs API key
+              const apiKey = process.env.NEXT_PUBLIC_ELEVEN_LABS_API_KEY; // Store this in .env.local in production
+              const voiceId = "UgBBYS2sOqTuMpoF3BR0"; // Rachel voice ID (replace with your preferred voice)
+              
+              // Call the ElevenLabs API
+              const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+                method: 'POST',
+                headers: {
+                  'Accept': 'audio/mpeg',
+                  'xi-api-key': apiKey,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  text,
+                  model_id: "eleven_monolingual_v1",
+                  voice_settings: {
+                    stability: 0.5,
+                    similarity_boost: 0.5
+                  }
+                })
+              });
+              
+              if (!response.ok) {
+                throw new Error(`ElevenLabs API error: ${response.status}`);
+              }
+              
+              // Convert the response to an audio blob
+              const audioBlob = await response.blob();
+              const audioUrl = URL.createObjectURL(audioBlob);
+              
+              // Play the audio
+              const audio = new Audio(audioUrl);
+              audio.play();
+            } catch (error) {
+              console.error("Error using ElevenLabs TTS:", error);
+              // Fallback to browser's speech synthesis if ElevenLabs fails
+              if ("speechSynthesis" in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                window.speechSynthesis.speak(utterance);
+              }
+            }
+          };
+          
+          playElevenLabsAudio(response.promptToUser);
         } else {
-          console.warn("Browser does not support Speech Synthesis.");
+          console.warn("No text to speak.");
         }
       }
 
