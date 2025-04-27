@@ -1,16 +1,17 @@
 // API endpoint configuration
-const API_BASE_URL = 'https://deep-stable-gorilla.ngrok-free.app';
+// const API_BASE_URL = 'https://deep-stable-gorilla.ngrok-free.app';
+const API_BASE_URL = "https://localdev.ayush.digital";
 
 interface GenerateTaskFeedbackRequest {
-  task_description: string;  // The quest description entered by the user
-  task_id?: string;          // Used for subsequent requests in the conversation
-  address?: string;          // The human-readable location address
+  task_description: string; // The quest description entered by the user
+  task_id?: string; // Used for subsequent requests in the conversation
+  address?: string; // The human-readable location address
   additional_instructions?: string;
 }
 
 interface GenerateTaskFeedbackResponse {
   task_id: string;
-  response: string;  // This is the API response text (renamed from 'response')
+  response: string; // This is the API response text (renamed from 'response')
   multiple_choice?: string[];
   final_instruction?: string;
   subtasks?: any[];
@@ -19,15 +20,20 @@ interface GenerateTaskFeedbackResponse {
 /**
  * Send task description to get feedback from the LLM
  */
-export async function generateTaskFeedback(data: GenerateTaskFeedbackRequest): Promise<GenerateTaskFeedbackResponse> {
+export async function generateTaskFeedback(
+  data: GenerateTaskFeedbackRequest
+): Promise<GenerateTaskFeedbackResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/generate_feedback_on_task_description`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/api/generate_feedback_on_task_description`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
@@ -35,7 +41,7 @@ export async function generateTaskFeedback(data: GenerateTaskFeedbackRequest): P
 
     return response.json();
   } catch (error) {
-    console.error('Failed to generate task feedback:', error);
+    console.error("Failed to generate task feedback:", error);
     throw error;
   }
-} 
+}

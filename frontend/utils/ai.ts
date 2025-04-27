@@ -106,7 +106,9 @@ export async function getExampleTaskList(): Promise<
   z.infer<typeof taskListSchema>
 > {
   const res = await fetch(
-    "https://stephen.ayush.digital/api/get_latest_task",
+    // "https://stephen.ayush.digital/api/get_latest_task",
+    // "http://localhost:8000/api/get_latest_task",
+    "https://localdev.ayush.digital/api/get_latest_task",
     // "https://deep-stable-gorilla.ngrok-free.app/api/get_latest_task",
     {
       // headers: {

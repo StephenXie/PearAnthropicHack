@@ -28,45 +28,43 @@ SECRET_KEY = "django-insecure-3+w@panm#%armidp(+@u)o+2t^v%!f#)na-0=8h=59#9#-sw-k
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [".ngrok-free.app", "127.0.0.1", "stephen.ayush.digital"]
+ALLOWED_HOSTS = [".ngrok-free.app", "127.0.0.1", "stephen.ayush.digital", "localhost"]
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
     # apps
-    'api',
-    'task',
+    "api",
+    "task",
     # third party apps
-    'rest_framework',
-    'rest_framework.authtoken',
-    'corsheaders',
-    'django.contrib.sites',
-
+    "rest_framework",
+    "rest_framework.authtoken",
+    "corsheaders",
+    "django.contrib.sites",
     # auth
-    'dj_rest_auth',
-    'dj_rest_auth.registration',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.google',
+    "dj_rest_auth",
+    "dj_rest_auth.registration",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
 ]
 SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'SCOPE': [
-            'profile',
-            'email',
+    "google": {
+        "SCOPE": [
+            "profile",
+            "email",
         ],
-        'AUTH_PARAMS': {
-            'access_type': 'online',
-        }
+        "AUTH_PARAMS": {
+            "access_type": "online",
+        },
     }
 }
 
@@ -76,15 +74,15 @@ SOCIALACCOUNT_EMAIL_REQUIRED = False
 SITE_ID = 1
 REST_USE_JWT = True
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 from datetime import timedelta
 
@@ -96,26 +94,26 @@ SIMPLE_JWT = {
     "UPDATE_LAST_LOGIN": True,
     "USER_ID_FIELD": "userId",
     "USER_ID_CLAIM": "user_id",
-    "SIGNING_KEY": os.environ.get('JWT_SECRET_KEY'),
+    "SIGNING_KEY": os.environ.get("JWT_SECRET_KEY"),
 }
 
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3030',
+    "http://localhost:3030",
 ]
 REST_AUTH_SERIALIZERS = {
     "USER_DETAILS_SERIALIZER": "user.serializers.CustomUserModelSerializer",
 }
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.BasicAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication'
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.BasicAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-        'rest_framework.permissions.IsAuthenticated',
-    ]
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticated",
+    ],
 }
 
 ROOT_URLCONF = "sidequest.urls"
